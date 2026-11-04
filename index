@@ -1,0 +1,2 @@
+PPKGINDEX 1
+paghbox	1.0.0	1893dfb768c4ec6e6e772c9243fae772f6a66ce19562a2baf2404cc7a82d66ca	189811	applet-bundle	echo,true,false,yes,pwd,basename,dirname,seq,cat,wc,head,tail	pkg/paghbox-1.0.0.ppkg
