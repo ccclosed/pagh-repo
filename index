@@ -1,2 +1,2 @@
 PPKGINDEX 1
-paghbox	1.0.0	1893dfb768c4ec6e6e772c9243fae772f6a66ce19562a2baf2404cc7a82d66ca	189811	applet-bundle	echo,true,false,yes,pwd,basename,dirname,seq,cat,wc,head,tail	pkg/paghbox-1.0.0.ppkg
+paghbox	1.1.0	ea2910d108625a2b50eb277ab2859189e3c0d9d2089878338f8e404eed7862d8	298732	applet-bundle	echo,true,false,yes,pwd,basename,dirname,seq,cat,wc,head,tail,ls,stat,uname,hostname,arch,nproc,sleep,uptime,date,readlink,realpath,uniq,sort,nl,fold,expand,unexpand,rev,cut,tr,comm,paste,strings,hexdump,grep	pkg/paghbox-1.1.0.ppkg

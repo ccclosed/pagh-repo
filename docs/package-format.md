@@ -32,6 +32,12 @@ sha256=<hex of payload>   # must match the index entry
 installs `paghbox` once and creates one symlink per `commands` entry; each symlink
 dispatches on `argv[0]`.
 
+The format itself does not cap the number of commands. The kernel installer's
+current limit is `MAX_COMMANDS = 160` (raised from 32 in 0.10.2), which covers the
+120-applet target; a package above it would be downloaded and hash-checked, then
+refused with `pkg: install: package manifest is invalid`. That is an
+implementation limit, not a manifest error.
+
 ## Repository index (`index`)
 
 One line per package, LF-terminated:
