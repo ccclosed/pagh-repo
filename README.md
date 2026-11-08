@@ -5,6 +5,12 @@ pagh-riscv. Это не apt и не Debian: формат описан в
 [`docs/package-format.md`](docs/package-format.md), пакеты собираются из
 [`pagh-programs`](https://github.com/ccclosed/pagh-programs).
 
+## Сейчас
+
+`index` отдаёт `paghbox 1.9.0` (121 команда, 894925 байт,
+sha256 `ebd5a44378b2382a540500f6d6e38a2bdcfc9a72e8abfac92ae07697961a054a`);
+предыдущие 1.0.0–1.8.0 остаются в `pkg/` для истории.
+
 ## Раскладка
 
 ```
