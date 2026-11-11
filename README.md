@@ -7,9 +7,9 @@ pagh-riscv. Это не apt и не Debian: формат описан в
 
 ## Сейчас
 
-`index` отдаёт `paghbox 1.9.0` (121 команда, 894925 байт,
-sha256 `ebd5a44378b2382a540500f6d6e38a2bdcfc9a72e8abfac92ae07697961a054a`);
-предыдущие 1.0.0–1.8.0 остаются в `pkg/` для истории.
+`index` отдаёт `paghbox 1.10.0` (122 команды, 917490 байт,
+sha256 `75eb6007b4c6b368cd941643f246051855e8657ae9ee8eade703499357987d7a`);
+предыдущие 1.0.0–1.9.0 остаются в `pkg/` для истории.
 
 ## Раскладка
 
@@ -18,7 +18,9 @@ index                 # индекс: имя, версия, sha256, размер
 pkg/<name>-<ver>.ppkg # пакеты (ELF + манифест)
 docs/package-format.md
 tools/publish.py      # принять собранный repo/ из pagh-programs и проверить digests
+tools/verify.py       # проверить то, что лежит здесь (индекс + пакеты)
 serve.sh              # локальное HTTP-зеркало для QEMU (10.0.2.2:8000)
+.github/workflows/ci.yml  # CI: python3 tools/verify.py на push/pull_request
 ```
 
 ## Как обновить
@@ -30,17 +32,21 @@ python3 tools/build_repo.py          # создаёт repo/index и repo/pkg/*.p
 
 # здесь
 python3 tools/publish.py ../pagh-programs/repo
+python3 tools/verify.py              # то же, что сделает CI
 git add -A && git commit -m "repo: publish <packages>"
 git push
 ```
 
 `publish.py` проверяет, что каждый `index`-строковый sha256/размер совпадает с
-пакетом, и только потом копирует.
+пакетом, и только потом копирует. `verify.py` (и CI) дополнительно разбирает
+заголовок и манифест каждого `.ppkg` — включая исторические версии, которых нет
+в индексе, — и сверяет ELF payload с `sha256` манифеста.
 
 ## Как это скачивается
 
-Пока у порта нет TLS: установщик `pkg` говорит по plain HTTP, поэтому
-репозиторий зеркалируется на хосте:
+Установщик `pkg` пока не умеет TLS: в ядре с 0.21.0 есть userland-TLS-сессии
+(`tls_connect`/`tls_read`/`tls_write`), но `pkg` по-прежнему говорит по plain
+HTTP, поэтому репозиторий зеркалируется на хосте:
 
 ```sh
 ./serve.sh            # python3 -m http.server 8000 -d .
@@ -54,9 +60,22 @@ HTTPS + подписи пакетов (OpenPGP) — следующий майл�
 проверяет только SHA-256/размер из индекса и отказывается устанавливать при
 несовпадении. Зеркало без индекса или с битым пакетом отвергается.
 
+## Проверка
+
+```sh
+python3 tools/verify.py       # чтение только: ни сборки, ни сети
+python3 tools/publish.py ../pagh-programs/repo   # перед публикацией
+```
+
+CI (`.github/workflows/ci.yml`) запускает `tools/verify.py` на каждый push и
+pull request.
+
 ## Статус
 
 - [x] формат пакета и индекса зафиксирован (`docs/package-format.md`)
 - [x] GitHub-репозиторий создан
-- [ ] первый индекс с реальными пакетами (после первых портов)
-- [ ] HTTPS/подписи и автоматическая публикация из pagh-programs
+- [x] первый индекс с реальными пакетами (с 1.0.0, сейчас 1.10.0)
+- [x] проверка индекса/пакетов в CI (`tools/verify.py`)
+- [ ] HTTPS в `pkg` и OpenPGP-подписи пакетов (TLS в ядре есть с 0.21.0;
+      установщик ещё на plain HTTP)
+- [ ] автоматическая публикация из pagh-programs (сейчас `publish.py` вручную)
