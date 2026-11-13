@@ -21,6 +21,15 @@ Checks:
 * every `pkg/*.ppkg` is a well-formed `.ppkg` — historical versions stay in
   `pkg/` without an index line on purpose, so they are validated by their own
   manifest and filename, not by the index;
+* the indexed version is never older than a package kept in `pkg/` for the same
+  name, so "current" in the index cannot silently regress;
+* the `commands=` list has no duplicate or malformed applet name, and its
+  length equals what the package manifest says (the manifest is already
+  compared with the index; this catches a corrupt list rather than a split
+  source of truth);
+* the README's "Сейчас" sentence — version, command count, byte size and
+  SHA-256 of the current package — matches the index exactly. This is the
+  documentation-to-artifact check the repository previously lacked;
 * no foreign files under `pkg/`, no duplicate package names in the index.
 
 Only the Python standard library is used.
@@ -41,6 +50,19 @@ INDEX_MAGIC = "PPKGINDEX 1"
 ARCH = "riscv64"
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 NAME = re.compile(r"[a-z0-9][a-z0-9._-]*")
+# One applet name in the index's `commands=` list. These are the names in
+# paghbox's `NAMES` table: lowercase letters, digits and a few separators.
+COMMAND = re.compile(r"[a-z0-9][a-z0-9._+-]*")
+# The user address window from the RV64 ABI: a user ELF must enter inside it.
+# This is the upper bound the old check left out (it only rejected < 0x10000).
+USER_BASE = 0x10000
+USER_TOP = 0x4000_0000
+# The README sentence that states the current package's facts.
+README_CURRENT = re.compile(
+    r"`index` отдаёт `(?P<name>[a-z0-9._-]+) (?P<version>[^`]+)` "
+    r"\((?P<count>\d+) команд[а-я]*, (?P<size>\d+) байт, "
+    r"sha256 `(?P<digest>[0-9a-f]{64})`\)"
+)
 REQUIRED_MANIFEST = {
     "name",
     "version",
@@ -118,8 +140,67 @@ def validate_elf(payload: bytes, where: str) -> None:
     if e_machine != 243:
         raise VerifyError(f"{where}: e_machine={e_machine}, expected RISC-V (243)")
     entry = struct.unpack_from("<Q", payload, 24)[0]
-    if entry < 0x10000:
-        raise VerifyError(f"{where}: entry point {entry:#x} is below 0x10000")
+    if not USER_BASE <= entry < USER_TOP:
+        raise VerifyError(
+            f"{where}: entry point {entry:#x} is outside the user window "
+            f"{USER_BASE:#x}..{USER_TOP:#x}"
+        )
+
+
+def numeric_version(text: str) -> tuple[int, ...] | None:
+    """A dotted numeric version as a comparable tuple, or None.
+
+    A non-numeric version (a date, a pre-release suffix) is not an error: the
+    ordering check simply cannot compare it and skips it.
+    """
+    if not re.fullmatch(r"[0-9]+(?:\.[0-9]+)*", text):
+        return None
+    return tuple(int(part) for part in text.split("."))
+
+
+def check_readme(repo: pathlib.Path, indexed: list[dict[str, object]]) -> None:
+    """The README's "Сейчас" sentence must describe an indexed package exactly.
+
+    This is the documentation-to-artifact check: the repository's front page
+    quotes the version, applet count, byte size and SHA-256 that a user would
+    verify with `pkg`/`curl`, and those four figures drifting from `index` is
+    exactly the failure this repository exists to prevent.
+    """
+    path = repo / "README.md"
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise VerifyError(f"cannot read {path}: {error}") from error
+    flat = " ".join(raw.split())
+    match = README_CURRENT.search(flat)
+    if match is None:
+        raise VerifyError(
+            f"{path}: no current-package sentence "
+            '("`index` отдаёт `name version` (N команд, SIZE байт, '
+            'sha256 `HEX`)")'
+        )
+    name, version = match.group("name"), match.group("version")
+    package = next(
+        (p for p in indexed if p["name"] == name and p["version"] == version),
+        None,
+    )
+    if package is None:
+        raise VerifyError(
+            f"{path}: describes {name} {version}, which the index does not list"
+        )
+    count = int(match.group("count"))
+    if count != len(package["commands"]):
+        raise VerifyError(
+            f"{path}: says {count} commands, index says {len(package['commands'])}"
+        )
+    size = int(match.group("size"))
+    if size != package["size"]:
+        raise VerifyError(
+            f"{path}: says {size} bytes, index says {package['size']}"
+        )
+    digest = match.group("digest")
+    if digest != package["digest"]:
+        raise VerifyError(f"{path}: sha256 {digest} != index {package['digest']}")
 
 
 def verify(repo: pathlib.Path) -> int:
@@ -135,6 +216,7 @@ def verify(repo: pathlib.Path) -> int:
 
     referenced: set[pathlib.Path] = set()
     seen: set[str] = set()
+    indexed: list[dict[str, object]] = []
     packages = 0
     for number, line in enumerate(lines[1:], 2):
         if not line.strip():
@@ -163,6 +245,12 @@ def verify(repo: pathlib.Path) -> int:
             raise VerifyError(f"{where}: kind {kind!r} is not app/applet-bundle")
         if not commands:
             raise VerifyError(f"{where}: commands is empty")
+        command_names = commands.split(",")
+        if len(set(command_names)) != len(command_names):
+            raise VerifyError(f"{where}: commands has a duplicate applet name")
+        malformed = [c for c in command_names if not COMMAND.fullmatch(c)]
+        if malformed:
+            raise VerifyError(f"{where}: malformed applet name(s): {malformed}")
         if url.startswith("/") or ".." in url.split("/"):
             raise VerifyError(f"{where}: url {url!r} must be relative and stay in the repo")
 
@@ -193,6 +281,15 @@ def verify(repo: pathlib.Path) -> int:
             )
         if hashlib.sha256(data).hexdigest() != digest:
             raise VerifyError(f"{where}: package sha256 != index {digest}")
+        indexed.append(
+            {
+                "name": name,
+                "version": version,
+                "digest": digest,
+                "size": size,
+                "commands": command_names,
+            }
+        )
         packages += 1
 
     # Historical packages: well-formed and internally consistent, not indexed.
@@ -200,6 +297,7 @@ def verify(repo: pathlib.Path) -> int:
     if not pkg_dir.is_dir():
         raise VerifyError(f"{pkg_dir} does not exist")
     historical = 0
+    history: dict[str, list[tuple[str, str]]] = {}
     for path in sorted(pkg_dir.iterdir()):
         if path.suffix != ".ppkg":
             raise VerifyError(f"{pkg_dir}: unexpected file {path.name!r}")
@@ -212,10 +310,29 @@ def verify(repo: pathlib.Path) -> int:
         if manifest["arch"] != ARCH:
             raise VerifyError(f"{path}: manifest arch {manifest['arch']!r} != {ARCH!r}")
         historical += 1
+        previous = history.setdefault(manifest["name"], [])
+        previous.append((path.name, manifest["version"]))
+
+    # The index must describe the newest package of each name: a package left
+    # in `pkg/` with a greater version means the index silently went backwards.
+    for package in indexed:
+        current = numeric_version(package["version"])
+        if current is None:
+            continue
+        for filename, version in history.get(package["name"], []):
+            old = numeric_version(version)
+            if old is not None and old > current:
+                raise VerifyError(
+                    f"{index_path}: lists {package['name']} {package['version']} "
+                    f"but {filename} is newer ({version})"
+                )
+
+    check_readme(repo, indexed)
 
     print(
         f"OK: {index_path} lists {packages} package(s); "
-        f"{historical} historical package(s) valid; all digests and manifests agree"
+        f"{historical} historical package(s) valid; all digests and manifests agree; "
+        f"README matches the index"
     )
     return 0
 
