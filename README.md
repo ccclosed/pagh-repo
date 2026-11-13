@@ -5,6 +5,16 @@ pagh-riscv. Это не apt и не Debian: формат описан в
 [`docs/package-format.md`](docs/package-format.md), пакеты собираются из
 [`pagh-programs`](https://github.com/ccclosed/pagh-programs).
 
+## Branching and releases
+
+`main` is the stable branch; `dev` is the experimental integration branch. Feature
+and fix PRs target `dev`; stable releases are tagged from `main`, release
+candidates/pre-releases from `dev` (`vX.Y.Z-rc.N`). The release workflow refuses a
+tag cut from the wrong branch. See [BRANCHING.md](BRANCHING.md).
+
+Only stable releases are published here: `index` and `pkg/` correspond to a
+`main`-tagged release, and a pre-release is never published to this repository.
+
 ## Сейчас
 
 `index` отдаёт `paghbox 1.13.0` (131 команда, 988108 байт,
