@@ -50,14 +50,15 @@ repository.
 | `vX.Y.Z` | `main` | Release |
 | `vX.Y.Z-rc.N` | `dev` (must not already be on `main`) | Pre-release |
 
-New tags always carry the `v` prefix (`vX.Y.Z`, `vX.Y.Z-rc.N`); old bare-numeric
-tags stay as history. The version source of truth is the `index` manifest (the
-version field of the first package record, today the single `paghbox` package)
-together with the `pkg/*.ppkg` files it points at; the `README.md` figures
-mirror it and `tools/verify.py` enforces the match. `dev` carries the next
-publication, `main` the last published one. The release workflow checks both the
-tag's branch (stable: main; RC: dev-only) and that the tag base equals the
-version source. The operational checklist is in `RELEASING.md`.
+New tags must match `vX.Y.Z` or `vX.Y.Z-rc.N` exactly; the release workflow
+rejects bare `X.Y.Z`, `-pre.N` and any other spelling. Old bare-numeric tags
+stay as immutable history. The version source of truth is the `index` manifest
+(the version field of the first package record, today the single `paghbox`
+package) together with the `pkg/*.ppkg` files it points at; the `README.md`
+figures mirror it and `tools/verify.py` enforces the match. `dev` carries the
+next publication, `main` the last published one. The release workflow checks
+both the tag's branch (stable: main; RC: dev-only) and that the tag base equals
+the version source. The operational checklist is in `RELEASING.md`.
 
 ## Why two branches
 
